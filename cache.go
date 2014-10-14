@@ -12,7 +12,7 @@ type Block [16]byte
 type Slot struct {
 	slotNum  uint8 // 4 bits
 	validBit bool
-	tag      uint32 // 24 bits
+	tag      uint32 // 24 bits, for this assgn, only least sig, 4 are used.
 	block    Block
 }
 
@@ -38,7 +38,7 @@ func main() {
 	}
 	fmt.Println("")
 	fmt.Printf("MM[0x100]: %X\n", MM[0x100])
-	fmt.Printf("MM[0x7FF]: %X\n", MM[0x7FF])
+	fmt.Printf("MM[0x7FF]: %X\n\n", MM[0x7FF])
 
 	C.Display()
 }
@@ -59,40 +59,65 @@ func (c *Cache) initialize() {
 	}
 }
 
-func (c *Cache) WriteByte(addr uint32, B byte) {
-	// create slot:
-	// get block
-	// set valid bit
+func (c *Cache) WriteByte(addr uint32, b byte) {
+	// what if slot is not valid on write? , we just write to memory
 
-	// put slot in cache
+	// get slot #
+	slotNum := maskAndShift(slotNumMask, addr)
+	fmt.Println("slot Number on write: " + slotNum)
 
-	// write through to memory
-	MM.WriteThrough(addr, B)
+	// get the slot we're working with?
+	slot := c[slotNum]
+
+	if slot.validBit {
+		// update the slot in cache
+
+		// calculate location for new byte in slot.block
+		blockOffset := maskAndShift(blockOffsetMask, addr)
+
+		// put new value there
+		slot.block[blockOffset] = b
+
+		// put slot in cache
+
+		// write through to memory
+
+	}
+
+	// the write through to memory regardless
+	MM.WriteThrough(addr, b)
 
 }
 
+func (m *Memory) WriteThrough(addr uint32, b byte) {
+	// simply assign byte to location in memory
+	m[addr] = b
+}
+
 // wil return value, and true/false dep. on if it was a cache hit/miss
-func (c *Cache) ReadByte(addr uint32) (byte, bool) {
+func (c *Cache) ReadByte(addr uint32) (data byte, hit bool) {
+	// if in cache (i.e. valid bit true, and tags match)
+	tag := getTag(addr)
+
+	// block number is address of first byte in block.. right? so is taht blockBeginMask for this cache?
+	blockBegin := maskAndShift(blockBeginMask, addr)
+
+	// ask, is this block in cache?
+	// if yes: return value from cache, and true, for cache hit
+	// if no: update slot in cache with this block, update valid bit, return value and false for cache miss
+	// do a "getBlock()" method with a starting address that returns a slice of bytes?
 
 	return byte(0), false
 }
 
-func (m *Memory) WriteThrough(addr uint32, B byte) {
-
-}
-
-func buildSlot() *Slot {
-	return nil
-}
-
 // maskAndShift() returns desired bits in a 16-bit value
 // depending on the mask (including a shift value)
-func maskAndShiftShort(mask Mask, inputBits int16) int16 {
-	return (inputBits & int16(mask.bits)) >> mask.shift
+func maskAndShift(mask Mask, addr uint32) uint32 {
+	return (addr & uint32(mask.bits)) >> mask.shift
 }
 
-func getTag(address uint32) uint32 {
-	return address >> 8
+func getTag(addr uint32) uint32 {
+	return addr >> 8
 }
 
 func (c *Cache) Display() {
