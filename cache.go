@@ -10,6 +10,7 @@ type Memory [2048]uint16
 type Cache [16]Slot
 type Block [16]byte
 
+// unit of our cache, holds block and block meta data
 type Slot struct {
 	slotNum  uint8 // 4 bits
 	validBit bool
@@ -17,17 +18,17 @@ type Slot struct {
 	block    Block
 }
 
+// helper struct for masking values
 type Mask struct {
 	bits  uint32
 	shift uint8
 }
 
+// masks
 var slotNumMask = Mask{0xF0, 4}
 var blockOffsetMask = Mask{0x0F, 0}
-var blockBeginMask = Mask{0xFFFFFFF0, 4}
 
-//var tagMask = Mask{0xFFFFFF00, 8} just need to shift over
-
+// declare our Main memory(MM) and Cache(C) objects
 var MM = &Memory{}
 var C = &Cache{}
 
@@ -37,6 +38,7 @@ func main() {
 	runCLI()
 }
 
+// runCLI() handles the user input cycle (set up for automation)
 func runCLI() {
 	for {
 		fmt.Println("(R)ead, (W)rite, or (D)isplay Cache?")
@@ -95,6 +97,8 @@ func runCLI() {
 	}
 }
 
+// WriteByte() writes byte to address in cache and through to MM
+// returns true if cache hit, false if not
 func (c *Cache) WriteByte(addr uint32, b byte) bool {
 	hit := false
 
@@ -135,21 +139,14 @@ func (c *Cache) WriteByte(addr uint32, b byte) bool {
 
 }
 
-func getBlockFromMemory(blockBegin uint32) Block {
-	var block Block
-	for i, _ := range block {
-		block[i] = byte(MM[blockBegin])
-		blockBegin++
-	}
-	return block
-}
-
+// WriteThrough() writes byte directly to main memory address
 func (m *Memory) WriteThrough(addr uint32, b byte) {
 	// simply assign byte to location in memory
 	m[addr] = uint16(b)
 }
 
-// will return value, and true/false dep. on if it was a cache hit/miss
+// ReadByte attempts a cache read. If cache miss, updates cache
+// reads a block from MM, and returns data, false. If hit, returns data, true
 func (c *Cache) ReadByte(addr uint32) (data byte, hit bool) {
 	// get details about address:
 	slotNum := maskAndShift(slotNumMask, addr)
@@ -178,12 +175,24 @@ func (c *Cache) ReadByte(addr uint32) (data byte, hit bool) {
 	}
 }
 
+// getBlockFromMemory() returns an accurate block from MM
+func getBlockFromMemory(blockBegin uint32) Block {
+	var block Block
+	for i, _ := range block {
+		block[i] = byte(MM[blockBegin])
+		blockBegin++
+	}
+	return block
+}
+
+// helper method handles hexadecimal user input
 func getHexAddressInput() uint32 {
 	var input uint32
 	fmt.Scanf("%X", &input)
 	return input
 }
 
+// m.Initialize() populates main memory for simulation
 func (m *Memory) initialize() {
 	inc := uint16(0x00)
 	for i, _ := range m {
@@ -192,6 +201,7 @@ func (m *Memory) initialize() {
 	}
 }
 
+// c.Initialize() populates our cache with empty slots
 func (c *Cache) initialize() {
 	slotInc := uint8(0x0)
 	for i, _ := range c {
@@ -206,10 +216,12 @@ func maskAndShift(mask Mask, addr uint32) uint32 {
 	return (addr & uint32(mask.bits)) >> mask.shift
 }
 
+// getTag() grabs the tag value for a given address in our simulation
 func getTag(addr uint32) uint32 {
 	return addr >> 8
 }
 
+// display pretty prints our cache
 func (c *Cache) Display() {
 	fmt.Println("Slot#|Valid| Tag | Data")
 	for _, slot := range c {
@@ -217,6 +229,7 @@ func (c *Cache) Display() {
 	}
 }
 
+// Stringer interface satisfied on a slot
 func (s Slot) String() string {
 	var validPrint string = ""
 	if s.validBit {
@@ -227,6 +240,7 @@ func (s Slot) String() string {
 	return fmt.Sprintf("  %X  |  %s  |  %X  | %v", s.slotNum, validPrint, s.tag, s.block)
 }
 
+// Stringer for a block
 func (b Block) String() string {
 	blockStrings := make([]string, len(b))
 	for i, value := range b {
