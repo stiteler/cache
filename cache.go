@@ -33,14 +33,121 @@ var C = &Cache{}
 func main() {
 	MM.initialize()
 	C.initialize()
-	for _, i := range MM {
-		fmt.Printf("%X ", MM[i])
-	}
-	fmt.Println("")
-	fmt.Printf("MM[0x100]: %X\n", MM[0x100])
-	fmt.Printf("MM[0x7FF]: %X\n\n", MM[0x7FF])
+	runCLI()
+}
 
-	C.Display()
+func runCLI() {
+	for {
+		fmt.Println("(R)ead, (W)rite, or (D)isplay Cache?")
+		var input string
+		fmt.Scanf("%s", &input)
+
+		switch input {
+		case "R", "r":
+			fmt.Println("What address would you like to read?")
+			address := getHexAddressInput()
+			value, hit := C.ReadByte(address)
+
+			fmt.Printf("At that byte there is the value: %02X", value)
+			if hit {
+				fmt.Printf(", Cache Hit\n")
+			} else {
+				fmt.Printf(", Cache Miss\n")
+			}
+			continue
+
+		case "W", "w":
+			fmt.Println("What address would you like to write to?")
+			address := getHexAddressInput()
+			fmt.Println("What data would you like to write at that address?")
+			data := getHexAddressInput()
+			hit := C.WriteByte(address, byte(data))
+			fmt.Printf("Value %X has been written to address %X", data, address)
+			if hit {
+				fmt.Printf(", Cache Hit\n")
+			} else {
+				fmt.Printf(", Cache Miss\n")
+			}
+
+		case "D", "d":
+			C.Display()
+			continue
+		}
+	}
+}
+
+func (c *Cache) WriteByte(addr uint32, b byte) (hit bool) {
+	hit := false
+
+	// get slot #
+	slotNum := maskAndShift(slotNumMask, addr)
+	fmt.Printf("slot Number on write: %d\n", slotNum)
+
+	// get the slot we're working with?
+	slot := c[slotNum]
+
+	// calc blockOffset for use later
+	blockOffset := maskAndShift(blockOffsetMask, addr)
+
+	if slot.validBit {
+		// update the slot in cache
+
+		// put new value there
+		slot.block[blockOffset] = b
+
+		hit = true
+	} else {
+		// bring block into slot from memory
+
+		blockBegin := addr - blockOffset
+		slot.block = getBlockFromMemory(blockBegin)
+		slot.tag = getTag(addr)
+
+		slot.validBit = true
+	}
+
+	// the write through to memory regardless
+	MM.WriteThrough(addr, b)
+
+	// for now
+	return hit
+
+}
+
+func getBlockFromMemory(blockBegin uint32) [16]byte {
+	var block [16]byte
+	for i, _ := range block {
+		block[i] = byte(MM[blockBegin])
+		blockBegin++
+	}
+	return block
+}
+
+func (m *Memory) WriteThrough(addr uint32, b byte) {
+	// simply assign byte to location in memory
+	m[addr] = uint16(b)
+}
+
+// will return value, and true/false dep. on if it was a cache hit/miss
+func (c *Cache) ReadByte(addr uint32) (data byte, hit bool) {
+	// if in cache (i.e. valid bit true, and tags match)
+	//tag := getTag(addr)
+
+	// block number is address of first byte in block.. right? so is taht blockBeginMask for this cache?
+	//blockBegin := maskAndShift(blockBeginMask, addr)
+
+	// ask, is this block in cache?
+	// if yes: return value from cache, and true, for cache hit
+	// if no: update slot in cache with this block, update valid bit, return value and false for cache miss
+	// do a "getBlock()" method with a starting address that returns a slice of bytes?
+
+	return byte(MM[addr]), false
+}
+
+func getHexAddressInput() uint32 {
+	var input uint32
+	fmt.Scanf("%X", &input)
+	return input
 }
 
 func (m *Memory) initialize() {
@@ -57,57 +164,6 @@ func (c *Cache) initialize() {
 		c[i] = Slot{slotNum: slotInc}
 		slotInc++
 	}
-}
-
-func (c *Cache) WriteByte(addr uint32, b byte) {
-	// what if slot is not valid on write? , we just write to memory
-
-	// get slot #
-	slotNum := maskAndShift(slotNumMask, addr)
-	fmt.Println("slot Number on write: " + slotNum)
-
-	// get the slot we're working with?
-	slot := c[slotNum]
-
-	if slot.validBit {
-		// update the slot in cache
-
-		// calculate location for new byte in slot.block
-		blockOffset := maskAndShift(blockOffsetMask, addr)
-
-		// put new value there
-		slot.block[blockOffset] = b
-
-		// put slot in cache
-
-		// write through to memory
-
-	}
-
-	// the write through to memory regardless
-	MM.WriteThrough(addr, b)
-
-}
-
-func (m *Memory) WriteThrough(addr uint32, b byte) {
-	// simply assign byte to location in memory
-	m[addr] = b
-}
-
-// wil return value, and true/false dep. on if it was a cache hit/miss
-func (c *Cache) ReadByte(addr uint32) (data byte, hit bool) {
-	// if in cache (i.e. valid bit true, and tags match)
-	tag := getTag(addr)
-
-	// block number is address of first byte in block.. right? so is taht blockBeginMask for this cache?
-	blockBegin := maskAndShift(blockBeginMask, addr)
-
-	// ask, is this block in cache?
-	// if yes: return value from cache, and true, for cache hit
-	// if no: update slot in cache with this block, update valid bit, return value and false for cache miss
-	// do a "getBlock()" method with a starting address that returns a slice of bytes?
-
-	return byte(0), false
 }
 
 // maskAndShift() returns desired bits in a 16-bit value
@@ -144,3 +200,43 @@ func (b Block) String() string {
 	}
 	return fmt.Sprintf(strings.Join(blockStrings, " "))
 }
+
+/*func runCLIFromInputFile() {
+	// todo: get hex from this channel
+	inputChan := initializeInputChannel()
+	switch <-inputChan {
+	case "R", "r":
+		fmt.Println("What address would you like to read?")
+		address := getHexAddressInput()
+		value, hit := C.ReadByte(address)
+
+		fmt.Printf("At that byte there is the value: %02X", value)
+		if hit {
+			fmt.Printf(", Cache Hit\n")
+		} else {
+			fmt.Printf(", Cache Miss\n")
+		}
+		continue
+	case "W", "w":
+		fmt.Println("What address would you like to write to?")
+		address := getHexAddressInput()
+		hit := C.WriteByte(address)
+		if hit {
+			fmt.Printf(", Cache Hit\n")
+		} else {
+			fmt.Printf(", Cache Miss\n")
+		}
+	case "D", "d":
+		C.Display()
+		continue
+	case "":
+		break
+	}
+}
+
+func initializeInputChannel() chan string {
+	// load input from a file, fill a channel?
+	inputChan := make(chan string, 46)
+
+	return inputChan
+}*/
