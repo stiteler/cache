@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -42,10 +43,17 @@ func runCLI() {
 		var input string
 		fmt.Scanf("%s", &input)
 
+		// for automation
+		fmt.Println(input)
+
 		switch input {
 		case "R", "r":
 			fmt.Println("What address would you like to read?")
 			address := getHexAddressInput()
+
+			// for automation
+			fmt.Printf("%X\n", address)
+
 			value, hit := C.ReadByte(address)
 
 			fmt.Printf("At that byte there is the value: %02X", value)
@@ -54,13 +62,20 @@ func runCLI() {
 			} else {
 				fmt.Printf(", Cache Miss\n")
 			}
-			continue
 
 		case "W", "w":
 			fmt.Println("What address would you like to write to?")
 			address := getHexAddressInput()
+
+			// for automation
+			fmt.Printf("%X\n", address)
+
 			fmt.Println("What data would you like to write at that address?")
 			data := getHexAddressInput()
+
+			// for automation
+			fmt.Printf("%X\n", data)
+
 			hit := C.WriteByte(address, byte(data))
 			fmt.Printf("Value %X has been written to address %X", data, address)
 			if hit {
@@ -71,7 +86,11 @@ func runCLI() {
 
 		case "D", "d":
 			C.Display()
-			continue
+
+		case "exit":
+			// this is for automation purposes, linux piping
+			// cat shortInput.txt | go run cache.go
+			os.Exit(0)
 		}
 	}
 }
@@ -81,7 +100,6 @@ func (c *Cache) WriteByte(addr uint32, b byte) bool {
 
 	// get slot #
 	slotNum := maskAndShift(slotNumMask, addr)
-	fmt.Printf("slot Number on write: %X\n", slotNum)
 
 	// get the slot we're working with
 	slot := &c[slotNum]
@@ -104,6 +122,9 @@ func (c *Cache) WriteByte(addr uint32, b byte) bool {
 		slot.block = getBlockFromMemory(blockBegin)
 		slot.tag = thisTag
 		slot.validBit = true
+
+		// then byte to cache
+		slot.block[blockOffset] = b
 	}
 
 	// the write through to memory regardless
@@ -120,7 +141,6 @@ func getBlockFromMemory(blockBegin uint32) Block {
 		block[i] = byte(MM[blockBegin])
 		blockBegin++
 	}
-	fmt.Println(block)
 	return block
 }
 
@@ -214,43 +234,3 @@ func (b Block) String() string {
 	}
 	return fmt.Sprintf(strings.Join(blockStrings, " "))
 }
-
-/*func runCLIFromInputFile() {
-	// todo: get hex from this channel
-	inputChan := initializeInputChannel()
-	switch <-inputChan {
-	case "R", "r":
-		fmt.Println("What address would you like to read?")
-		address := getHexAddressInput()
-		value, hit := C.ReadByte(address)
-
-		fmt.Printf("At that byte there is the value: %02X", value)
-		if hit {
-			fmt.Printf(", Cache Hit\n")
-		} else {
-			fmt.Printf(", Cache Miss\n")
-		}
-		continue
-	case "W", "w":
-		fmt.Println("What address would you like to write to?")
-		address := getHexAddressInput()
-		hit := C.WriteByte(address)
-		if hit {
-			fmt.Printf(", Cache Hit\n")
-		} else {
-			fmt.Printf(", Cache Miss\n")
-		}
-	case "D", "d":
-		C.Display()
-		continue
-	case "":
-		break
-	}
-}
-
-func initializeInputChannel() chan string {
-	// load input from a file, fill a channel?
-	inputChan := make(chan string, 46)
-
-	return inputChan
-}*/
