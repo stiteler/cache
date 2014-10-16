@@ -10,9 +10,9 @@ type Memory [2048]uint16
 type Cache [16]Slot
 type Block [16]byte
 
-// unit of our cache, holds block and block meta data
+// unit of our cache, holds block data and meta data
 type Slot struct {
-	slotNum  uint8 // 4 bits
+	slotNum  uint8
 	validBit bool
 	tag      uint32 // 24 bits, for this assgn, only least sig, 4 are used.
 	block    Block
@@ -91,7 +91,7 @@ func runCLI() {
 
 		case "exit":
 			// this is for automation purposes, linux piping
-			// cat shortInput.txt | go run cache.go
+			// cat input.txt | go run cache.go >> output.txt
 			os.Exit(0)
 		}
 	}
