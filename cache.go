@@ -14,7 +14,7 @@ type Block [16]byte
 type Slot struct {
 	slotNum  uint8
 	validBit bool
-	tag      uint32 // 24 bits, for this assgn, only least sig, 4 are used.
+	tag      uint32 // 24 bits, for this assgnmnt, only least sig, 4 are used.
 	block    Block
 }
 
@@ -28,7 +28,7 @@ type Mask struct {
 var slotNumMask = Mask{0xF0, 4}
 var blockOffsetMask = Mask{0x0F, 0}
 
-// declare our Main memory(MM) and Cache(C) objects
+// declare our Main memory(MM) and Cache(C) structs
 var MM = &Memory{}
 var C = &Cache{}
 
@@ -45,8 +45,8 @@ func runCLI() {
 		var input string
 		fmt.Scanf("%s", &input)
 
-		// for automation
-		fmt.Println(input)
+		// echo piped input for output file
+		//fmt.Println(input)
 
 		switch input {
 		case "R", "r":
@@ -69,14 +69,14 @@ func runCLI() {
 			fmt.Println("What address would you like to write to?")
 			address := getHexAddressInput()
 
-			// for automation
-			fmt.Printf("%X\n", address)
+			// echo piped input for output file
+			//fmt.Printf("%X\n", address)
 
 			fmt.Println("What data would you like to write at that address?")
 			data := getHexAddressInput()
 
-			// for automation
-			fmt.Printf("%X\n", data)
+			// echo piped input for output file
+			//fmt.Printf("%X\n", data)
 
 			hit := C.WriteByte(address, byte(data))
 			fmt.Printf("Value %X has been written to address %X", data, address)
@@ -93,50 +93,49 @@ func runCLI() {
 			// this is for automation purposes, linux piping
 			// cat input.txt | go run cache.go >> output.txt
 			os.Exit(0)
+		default:
+			continue
 		}
 	}
 }
 
 // WriteByte() writes byte to address in cache and through to MM
-// returns true if cache hit, false if not
+// returns true if cache hit, false if not (if miss, brings block in)
 func (c *Cache) WriteByte(addr uint32, b byte) bool {
+	// default cache miss
 	hit := false
 
 	// get slot #
 	slotNum := maskAndShift(slotNumMask, addr)
 
-	// get the slot we're working with
+	// get pointer to the slot we're working with
 	slot := &c[slotNum]
 
-	// calc blockOffset for use later
+	// calc blockOffset and tag
 	blockOffset := maskAndShift(blockOffsetMask, addr)
 	thisTag := getTag(addr)
 
+	// if a cache hit
 	if slot.validBit && slot.tag == thisTag {
-		// do i also need to check if the tag works out?
-		// update the slot in cache
-
-		// put new value there
+		// update this slot in cache
 		slot.block[blockOffset] = b
 
 		hit = true
-	} else {
+	} else { // cache miss
 		// bring block into slot from memory
 		blockBegin := addr - blockOffset
 		slot.block = getBlockFromMemory(blockBegin)
 		slot.tag = thisTag
 		slot.validBit = true
 
-		// then byte to cache
+		// then write our byte to the cache
 		slot.block[blockOffset] = b
 	}
 
-	// the write through to memory regardless
+	// lastly, always write through to memory
 	MM.WriteThrough(addr, b)
 
-	// for now
 	return hit
-
 }
 
 // WriteThrough() writes byte directly to main memory address
@@ -175,7 +174,7 @@ func (c *Cache) ReadByte(addr uint32) (data byte, hit bool) {
 	}
 }
 
-// getBlockFromMemory() returns an accurate block from MM
+// getBlockFromMemory() returns a block from MM
 func getBlockFromMemory(blockBegin uint32) Block {
 	var block Block
 	for i, _ := range block {
